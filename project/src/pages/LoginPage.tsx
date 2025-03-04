@@ -29,6 +29,7 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isSignup, setIsSignup] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
   const { 
     register: registerLogin, 
@@ -48,6 +49,7 @@ const LoginPage: React.FC = () => {
   
   const onLoginSubmit = async (data: LoginFormData) => {
     setLoginError(null);
+    setIsLoading(true);
     try {
       const success = await login(data.email, data.password);
       if (success) {
@@ -57,20 +59,29 @@ const LoginPage: React.FC = () => {
       }
     } catch (error) {
       setLoginError('Ocorreu um erro ao fazer login');
+    } finally {
+      setIsLoading(false);
     }
   };
   
   const onSignupSubmit = async (data: SignupFormData) => {
     setLoginError(null);
+    setIsLoading(true);
     try {
       const success = await signup(data.email, data.password, data.name);
       if (success) {
-        navigate('/');
+        // Show success message before redirecting
+        setLoginError('Conta criada com sucesso! Redirecionando...');
+        setTimeout(() => {
+          navigate('/');
+        }, 2000);
       } else {
         setLoginError('Erro ao criar conta. Tente novamente.');
       }
     } catch (error) {
       setLoginError('Ocorreu um erro ao criar conta');
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -93,7 +104,7 @@ const LoginPage: React.FC = () => {
           </div>
           
           {loginError && (
-            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md flex items-center">
+            <div className={`mb-4 p-3 ${loginError.includes('sucesso') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} rounded-md flex items-center`}>
               <AlertCircle className="h-5 w-5 mr-2" />
               <span>{loginError}</span>
             </div>
@@ -175,11 +186,11 @@ const LoginPage: React.FC = () => {
               
               <button
                 type="submit"
-                disabled={isSignupSubmitting}
+                disabled={isSignupSubmitting || isLoading}
                 className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 flex items-center justify-center"
               >
                 <UserPlus className="h-5 w-5 mr-2" />
-                {isSignupSubmitting ? 'Criando conta...' : 'Criar Conta'}
+                {isSignupSubmitting || isLoading ? 'Criando conta...' : 'Criar Conta'}
               </button>
               
               <div className="mt-4 text-center">
@@ -232,10 +243,10 @@ const LoginPage: React.FC = () => {
               
               <button
                 type="submit"
-                disabled={isLoginSubmitting}
+                disabled={isLoginSubmitting || isLoading}
                 className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
               >
-                {isLoginSubmitting ? 'Entrando...' : 'Entrar'}
+                {isLoginSubmitting || isLoading ? 'Entrando...' : 'Entrar'}
               </button>
               
               <div className="mt-4 text-center">

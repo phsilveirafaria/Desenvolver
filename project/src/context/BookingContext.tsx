@@ -1,14 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Booking, Room } from '../types';
-import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
+import { rooms as mockRooms, bookings as mockBookings } from '../data/mockData';
 
 interface BookingContextType {
   bookings: Booking[];
   rooms: Room[];
-  addBooking: (booking: Omit<Booking, 'id' | 'createdAt' | 'status'>) => Promise<boolean>;
-  updateBookingStatus: (id: string, status: 'approved' | 'rejected') => Promise<boolean>;
-  deleteBooking: (id: string) => Promise<boolean>;
   getBookingsByRoom: (roomId: string) => Booking[];
   getRoom: (roomId: string) => Room | undefined;
   isLoading: boolean;
@@ -21,54 +18,61 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const { currentUser, isAuthenticated } = useAuth();
 
   const fetchRooms = async () => {
     try {
+      console.log('Fetching rooms from Supabase...');
       const { data, error } = await supabase
         .from('rooms')
         .select('*')
         .order('name');
       
       if (error) {
-        throw error;
+        console.error('Error fetching rooms from Supabase:', error);
+        // Fall back to mock data if there's an error
+        setRooms(mockRooms);
+        return;
       }
       
-      if (data) {
+      if (data && data.length > 0) {
+        console.log(`Found ${data.length} rooms in Supabase`);
         const formattedRooms: Room[] = data.map(room => ({
           id: room.id,
           name: room.name,
           capacity: room.capacity,
           description: room.description,
-          imageUrl: room.image_url
+          imageUrl: room.image_url || 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'
         }));
         
         setRooms(formattedRooms);
+      } else {
+        console.log('No rooms found in Supabase, using mock data');
+        setRooms(mockRooms);
       }
     } catch (error) {
       console.error('Error fetching rooms:', error);
+      // Fall back to mock data on any error
+      setRooms(mockRooms);
     }
   };
 
   const fetchBookings = async () => {
     try {
-      if (!isAuthenticated) {
-        setBookings([]);
-        return;
-      }
-      
-      let query = supabase
+      console.log('Fetching bookings from Supabase...');
+      const { data, error } = await supabase
         .from('bookings')
         .select('*')
         .order('start_time');
       
-      const { data, error } = await query;
-      
       if (error) {
-        throw error;
+        console.error('Error fetching bookings from Supabase:', error);
+        // Fall back to mock data if there's an error
+        setBookings(mockBookings);
+        return;
       }
       
-      if (data) {
+      if (data && data.length > 0) {
+        console.log(`Found ${data.length} bookings in Supabase`);
         const formattedBookings: Booking[] = data.map(booking => ({
           id: booking.id,
           roomId: booking.room_id,
@@ -82,86 +86,54 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }));
         
         setBookings(formattedBookings);
+      } else {
+        console.log('No bookings found in Supabase, using mock data');
+        setBookings(mockBookings);
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
+      // Fall back to mock data on any error
+      setBookings(mockBookings);
     }
   };
 
   const refreshData = async () => {
     setIsLoading(true);
-    await Promise.all([fetchRooms(), fetchBookings()]);
-    setIsLoading(false);
+    try {
+      await Promise.all([fetchRooms(), fetchBookings()]);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
     refreshData();
-  }, [isAuthenticated]);
-
-  const addBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt' | 'status'>): Promise<boolean> => {
-    try {
-      if (!currentUser) return false;
+    
+    // Set up a subscription for real-time updates
+    const roomsSubscription = supabase
+      .channel('rooms-channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => {
+        console.log('Rooms changed, refreshing data...');
+        fetchRooms();
+      })
+      .subscribe();
       
-      const { error } = await supabase
-        .from('bookings')
-        .insert({
-          room_id: bookingData.roomId,
-          user_id: currentUser.id,
-          user_name: currentUser.name,
-          start_time: bookingData.startTime,
-          end_time: bookingData.endTime,
-          notes: bookingData.notes
-        });
-      
-      if (error) {
-        throw error;
-      }
-      
-      await fetchBookings();
-      return true;
-    } catch (error) {
-      console.error('Error adding booking:', error);
-      return false;
-    }
-  };
-
-  const updateBookingStatus = async (id: string, status: 'approved' | 'rejected'): Promise<boolean> => {
-    try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status })
-        .eq('id', id);
-      
-      if (error) {
-        throw error;
-      }
-      
-      await fetchBookings();
-      return true;
-    } catch (error) {
-      console.error('Error updating booking status:', error);
-      return false;
-    }
-  };
-
-  const deleteBooking = async (id: string): Promise<boolean> => {
-    try {
-      const { error } = await supabase
-        .from('bookings')
-        .delete()
-        .eq('id', id);
-      
-      if (error) {
-        throw error;
-      }
-      
-      await fetchBookings();
-      return true;
-    } catch (error) {
-      console.error('Error deleting booking:', error);
-      return false;
-    }
-  };
+    const bookingsSubscription = supabase
+      .channel('bookings-channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+        console.log('Bookings changed, refreshing data...');
+        fetchBookings();
+      })
+      .subscribe();
+    
+    // Clean up subscriptions
+    return () => {
+      supabase.removeChannel(roomsSubscription);
+      supabase.removeChannel(bookingsSubscription);
+    };
+  }, []);
 
   const getBookingsByRoom = (roomId: string) => {
     return bookings.filter(booking => booking.roomId === roomId);
@@ -176,9 +148,6 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       value={{ 
         bookings, 
         rooms, 
-        addBooking, 
-        updateBookingStatus, 
-        deleteBooking, 
         getBookingsByRoom,
         getRoom,
         isLoading,

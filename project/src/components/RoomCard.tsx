@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Room } from '../types';
-import { Users } from 'lucide-react';
+import { Users, Calendar } from 'lucide-react';
 
 interface RoomCardProps {
   room: Room;
@@ -32,7 +32,8 @@ const RoomCard: React.FC<RoomCardProps> = ({ room }) => {
         <p className="text-gray-600 line-clamp-2">{room.description}</p>
         
         <div className="mt-4 pt-3 border-t">
-          <span className="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+          <span className="inline-flex items-center bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+            <Calendar className="h-4 w-4 mr-1" />
             Ver disponibilidade
           </span>
         </div>
